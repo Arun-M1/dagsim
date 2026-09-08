@@ -86,16 +86,19 @@ public class SampleScenarioFactory implements ScenarioFactory {
 
 		if (orchestratorPolicy.equalsIgnoreCase("EFT")) {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
-					new edu.boun.edgecloudsim.dagsim.scheduling.EFTPolicy());
+				new edu.boun.edgecloudsim.dagsim.scheduling.EFTPolicy());
+		} else if (orchestratorPolicy.equalsIgnoreCase("RANDOM")) {
+			edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy randomPolicy = SS.hasRngSeed() ? new edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy(SS.getRngSeed()) : new edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy();
+			return new DagAwareOrchestrator(orchestratorPolicy, simScenario, randomPolicy);
 		} else if (orchestratorPolicy.equalsIgnoreCase("REMOTE_RL")) {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
-					new edu.boun.edgecloudsim.dagsim.scheduling.RemoteRLPolicy(SS.getRlServiceUrl()));
+				new edu.boun.edgecloudsim.dagsim.scheduling.RemoteRLPolicy(SS.getRlServiceUrl()));
 		} else if (orchestratorPolicy.equalsIgnoreCase("EDGE_FIRST_DAG")) {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
-					new edu.boun.edgecloudsim.dagsim.scheduling.EdgeFirstFeasiblePolicy());
+				new edu.boun.edgecloudsim.dagsim.scheduling.EdgeFirstFeasiblePolicy());
 		} else if (orchestratorPolicy.equalsIgnoreCase("ROUND_ROBIN_DAG")) {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
-					new edu.boun.edgecloudsim.dagsim.scheduling.RoundRobinPolicy());
+				new edu.boun.edgecloudsim.dagsim.scheduling.RoundRobinPolicy());
 		}
 
 		return new BasicEdgeOrchestrator(orchestratorPolicy, simScenario);

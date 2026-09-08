@@ -91,6 +91,7 @@ public class SimSettings {
 	private int NUM_OF_PLACE_TYPES;
 
 	// Network delay and bandwidth parameters (converted from properties file units)
+	private double EDGE_PROPAGATION_DELAY; // Edge datacenter propagation delay (seconds)
 	private double WAN_PROPAGATION_DELAY; // Wide Area Network delay (seconds)
 	private double GSM_PROPAGATION_DELAY; // GSM network delay (seconds)
 	private double LAN_INTERNAL_DELAY; // Local Area Network delay (seconds)
@@ -242,6 +243,7 @@ public class SimSettings {
 			MOBILE_DEVICE_COUNTER_SIZE = Integer.parseInt(prop.getProperty("mobile_device_counter_size"));
 			WLAN_RANGE = Integer.parseInt(prop.getProperty("wlan_range", "0"));
 
+			EDGE_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("edge_propagation_delay", "0"));
 			WAN_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("wan_propagation_delay", "0"));
 			GSM_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("gsm_propagation_delay", "0"));
 			LAN_INTERNAL_DELAY = Double.parseDouble(prop.getProperty("lan_internal_delay", "0"));
@@ -408,6 +410,13 @@ public class SimSettings {
 	 */
 	public boolean getFileLoggingEnabled() {
 		return FILE_LOG_ENABLED;
+	}
+
+	/**
+	 * returns edge datacenter propagation delay (in second unit) from properties file
+	 */
+	public double getEdgePropagationDelay() {
+		return EDGE_PROPAGATION_DELAY;
 	}
 
 	/**

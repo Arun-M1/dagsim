@@ -180,11 +180,13 @@ public class MM1Queue extends NetworkModel {
 		// Case 2: Mobile device uploading to edge orchestrator (WLAN + internal routing)
 		else if(destDeviceId == SimSettings.EDGE_ORCHESTRATOR_ID){
 			delay = getWlanUploadDelay(accessPointLocation, CloudSim.clock()) +
+					SimSettings.getInstance().getEdgePropagationDelay() +
 					SimSettings.getInstance().getInternalLanDelay();
 		}
 		// Case 3: Mobile device uploading to edge device (single-hop WLAN)
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID) {
-			delay = getWlanUploadDelay(accessPointLocation, CloudSim.clock());
+			delay = getWlanUploadDelay(accessPointLocation, CloudSim.clock()) +
+					SimSettings.getInstance().getEdgePropagationDelay();
 		}
 
 		return delay;
@@ -236,8 +238,9 @@ public class MM1Queue extends NetworkModel {
 		}
 		// Case 2: Edge device downloading results to mobile device
 		else{
-			// Base WLAN delay from access point to mobile device
-			delay = getWlanDownloadDelay(accessPointLocation, CloudSim.clock());
+			// Base WLAN and edge propagation delay from edge datacenter to mobile device
+			delay = getWlanDownloadDelay(accessPointLocation, CloudSim.clock()) +
+					SimSettings.getInstance().getEdgePropagationDelay();
 
 			// Resolve source edge datacenter either as list index or datacenter entity ID.
 			Datacenter sourceDc = resolveEdgeDatacenter(sourceDeviceId);
