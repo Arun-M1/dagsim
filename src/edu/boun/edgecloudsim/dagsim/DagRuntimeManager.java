@@ -99,6 +99,27 @@ public class DagRuntimeManager extends SimEntity {
         }
     }
 
+    private static class ExecutionTimeStats {
+        long count;
+        long edgeCount;
+        long cloudCount;
+        double totalMs;
+        double edgeTotalMs;
+        double cloudTotalMs;
+
+        void add(double executionTimeMs, int tier) {
+            count++;
+            totalMs += executionTimeMs;
+            if (tier == SimSettings.VM_TYPES.EDGE_VM.ordinal()) {
+                edgeCount++;
+                edgeTotalMs += executionTimeMs;
+            } else if (tier == SimSettings.VM_TYPES.CLOUD_VM.ordinal()) {
+                cloudCount++;
+                cloudTotalMs += executionTimeMs;
+            }
+        }
+    }
+
     // Extra estimate fields are logged to explain how the immediate reward was produced.
     private static class EstimatedReward {
         double latencyMs;
@@ -299,7 +320,7 @@ public class DagRuntimeManager extends SimEntity {
 
         SimSettings ss = SimSettings.getInstance();
 
-        long lengthMi = (long) (task.getDurationMs() * ss.getMipsForCloudVM() / 1000.0);
+        long lengthMi = (long) (task.getDurationMs() * ss.getAlibabaMips() / 1000.0);
         if (lengthMi <= 0) {
             lengthMi = 1;
         }
@@ -439,6 +460,7 @@ public class DagRuntimeManager extends SimEntity {
         double finishClock = CloudSim.clock();
         task.setFinishTimeMs(finishClock * 1000.0);
         task.setStartTimeMs(cloudlet.getExecStartTime() * 1000.0);
+        task.setActualExecutionTimeMs(cloudlet.getActualCPUTime() * 1000.0);
         task.setAssignedVmId(cloudlet.getAssociatedVmId());
         task.setAssignedDatacenterId(cloudlet.getAssociatedDatacenterId());
         int tier = (cloudlet.getAssociatedDatacenterId() == SimSettings.CLOUD_DATACENTER_ID)
@@ -456,7 +478,7 @@ public class DagRuntimeManager extends SimEntity {
             task.setUploadDelayMs(metrics.getOrDefault("lanUploadDelay", 0.0) * 1000.0
                     + metrics.getOrDefault("wanUploadDelay", 0.0) * 1000.0);
             task.setDownloadDelayMs(metrics.getOrDefault("lanDownloadDelay", 0.0) * 1000.0
-                    + metrics.getOrDefault("wanDownloadDelayf", 0.0) * 1000.0);
+                    + metrics.getOrDefault("wanDownloadDelay", 0.0) * 1000.0);
             task.setNetworkDelayMs(metrics.getOrDefault("netDelay", 0.0) * 1000.0);
             bwCost = metrics.getOrDefault("bwCost", 0.0);
             cpuCost = metrics.getOrDefault("cpuCost", 0.0);
@@ -466,7 +488,11 @@ public class DagRuntimeManager extends SimEntity {
             // double queueDelay = (task.getStartTimeMs() - task.getScheduledTimeMs());
             // task.setQueueDelayMs(Math.max(0, queueDelay));
         }
-        double queueDelay = (task.getStartTimeMs() - task.getScheduledTimeMs());
+        double vmQueueArrivalTimeMs = cloudlet.getVmQueueArrivalTimeMs();
+        if (vmQueueArrivalTimeMs < 0.0) {
+            vmQueueArrivalTimeMs = task.getScheduledTimeMs();
+        }
+        double queueDelay = task.getStartTimeMs() - vmQueueArrivalTimeMs;
         task.setQueueDelayMs(Math.max(0, queueDelay));
         if (actualCost <= 0.0) {
             double[] fallbackCosts = estimateCloudletCost(cloudlet);
@@ -866,7 +892,7 @@ public class DagRuntimeManager extends SimEntity {
         SimSettings ss = SimSettings.getInstance();
         double lengthMi = 1.0;
         if (base != null) {
-            lengthMi = Math.max(1.0, base.getDurationMs() * ss.getMipsForCloudVM() / 1000.0);
+            lengthMi = Math.max(1.0, base.getDurationMs() * ss.getAlibabaMips() / 1000.0);
             ctx.cpuMemoryMb = Math.max(base.getMemoryMb(), 1.0);
         } else {
             ctx.cpuMemoryMb = Math.max(ss.getRamForMobileVM(), 1.0);
@@ -909,6 +935,7 @@ public class DagRuntimeManager extends SimEntity {
                 System.out.println("Average DAG makespan (over scheduled DAGs): "
                         + (totalDagRunTimeMs / (double) dagsWithScheduledTasks.size()) + " ms");
             }
+            printAverageActualExecutionTime();
             printRewardSummary();
             System.out.println("==========================================");
         } catch (Exception e) {
@@ -941,7 +968,7 @@ public class DagRuntimeManager extends SimEntity {
 
     private void writeTaskLogHeader() {
         taskLogWriter.println(
-                "dag_id,task_id,task_type,dag_submit_ms,task_ready_ms,scheduled_ms,start_ms,finish_ms,tier,datacenter_id,vm_id,duration_ms,length_mi,proj_edge_sec,proj_cloud_sec,input_bytes,output_bytes,gpu_mem_mb,gpu_util,queue_wait_ms,net_propagation_ms,net_tx_ms,net_total_ms");
+                "dag_id,task_id,task_type,dag_submit_ms,task_ready_ms,scheduled_ms,start_ms,finish_ms,tier,datacenter_id,vm_id,duration_ms,length_mi,proj_edge_sec,proj_cloud_sec,input_bytes,output_bytes,gpu_mem_mb,gpu_util,queue_wait_ms,net_propagation_ms,net_tx_ms,net_total_ms,actual_execution_time_ms");
         taskLogWriter.flush();
     }
 
@@ -994,6 +1021,33 @@ public class DagRuntimeManager extends SimEntity {
                     maxReward));
         }
         System.out.println("=======================================");
+    }
+
+    private void printAverageActualExecutionTime() {
+        ExecutionTimeStats overall = new ExecutionTimeStats();
+
+        for (DagRecord dag : allDags) {
+            for (TaskRecord task : dag.getTasksById().values()) {
+                if (task.getState() != TaskRecord.TaskState.DONE) {
+                    continue;
+                }
+
+                double executionTimeMs = task.getActualExecutionTimeMs();
+                int tier = task.getAssignedTier();
+                overall.add(executionTimeMs, tier);
+            }
+        }
+
+        System.out.println("Task average actual execution time: " + averageSeconds(overall.totalMs, overall.count)
+                + " seconds. (on Edge: " + averageSeconds(overall.edgeTotalMs, overall.edgeCount)
+                + ", on Cloud: " + averageSeconds(overall.cloudTotalMs, overall.cloudCount) + ")");
+    }
+
+    private String averageSeconds(double totalMs, long count) {
+        if (count == 0) {
+            return "None";
+        }
+        return String.format("%.6f", totalMs / count / 1000.0);
     }
 
     private double normalizeRewardComponent(double value, double minValue, double maxValue, double fallbackScale, boolean clip) {
@@ -1067,7 +1121,7 @@ public class DagRuntimeManager extends SimEntity {
     private void logTaskCompletion(TaskRecord task, DagRecord dag) {
         // Compute same derived fields as scheduling time for logging
         SimSettings ss = SimSettings.getInstance();
-        long lengthMi = (long) (task.getDurationMs() * ss.getMipsForCloudVM() / 1000.0);
+        long lengthMi = (long) (task.getDurationMs() * ss.getAlibabaMips() / 1000.0);
         if (lengthMi <= 0) {
             lengthMi = 1;
         }
@@ -1108,7 +1162,8 @@ public class DagRuntimeManager extends SimEntity {
                 String.format("%.2f", task.getQueueDelayMs()),
                 "-1", // net_propagation_ms
                 "-1", // net_tx_ms
-                String.format("%.2f", task.getNetworkDelayMs())));
+                String.format("%.2f", task.getNetworkDelayMs()),
+                String.format("%.2f", task.getActualExecutionTimeMs())));
         taskLogWriter.flush();
     }
 

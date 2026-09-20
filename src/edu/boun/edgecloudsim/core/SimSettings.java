@@ -107,6 +107,7 @@ public class SimSettings {
 	private int MIPS_FOR_CLOUD_VM; // Processing power (MIPS)
 	private int RAM_FOR_CLOUD_VM; // Memory allocation (MB)
 	private int STORAGE_FOR_CLOUD_VM; // Storage allocation (Bytes)
+	private double ALIBABA_MIPS; // Reference CPU speed used to convert Alibaba-derived durations to MI
 
 	// Edge VM resource configuration parameters
 	private int CORE_FOR_VM; // CPU cores for edge VMs
@@ -258,6 +259,7 @@ public class SimSettings {
 			MIPS_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("mips_for_cloud_vm"));
 			RAM_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("ram_for_cloud_vm"));
 			STORAGE_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("storage_for_cloud_vm"));
+			ALIBABA_MIPS = Double.parseDouble(prop.getProperty("alibaba_mips", "100"));
 
 			RAM_FOR_VM = Integer.parseInt(prop.getProperty("ram_for_mobile_vm"));
 			CORE_FOR_VM = Integer.parseInt(prop.getProperty("core_for_mobile_vm"));
@@ -558,6 +560,13 @@ public class SimSettings {
 	 */
 	public int getMipsForCloudVM() {
 		return MIPS_FOR_CLOUD_VM;
+	}
+
+	/**
+	 * Returns the reference CPU speed used to convert dataset task durations to MI.
+	 */
+	public double getAlibabaMips() {
+		return ALIBABA_MIPS;
 	}
 
 	/**

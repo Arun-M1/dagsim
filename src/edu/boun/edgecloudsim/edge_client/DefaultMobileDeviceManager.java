@@ -50,8 +50,7 @@ public class DefaultMobileDeviceManager extends MobileDeviceManager {
 	private static final int REQUEST_RECEIVED_BY_CLOUD = BASE + 1;
 	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE = BASE + 2;
 	private static final int RESPONSE_RECEIVED_BY_MOBILE_DEVICE = BASE + 3;
-	private static final int RESERVED_VM_SUBMIT = BASE + 4;
-	private static final double VM_SUBMIT_RETRY_DELAY = 0.001;
+	private static final int ASSIGNED_VM_SUBMIT = BASE + 4;
 	private int taskIdCounter = 0; // Counter for generating unique task IDs
 	private final Map<Integer, Double> uploadDelayByTaskId = new HashMap<>();
 
@@ -241,17 +240,18 @@ public class DefaultMobileDeviceManager extends MobileDeviceManager {
 				}
 				SimLogger.getInstance().setQoE(task.getCloudletId(), qoe);
 
-				// Log task completion (this aggregates all metrics including cost and QoE)
-				SimLogger.getInstance().taskEnded(task.getCloudletId(), CloudSim.clock());
-
-				// Notify DAG runtime manager (if present) that this cloudlet finished
+				// Read the task metrics before taskEnded removes them from SimLogger.
 				if (DagRuntimeManager.getInstance() != null) {
 					DagRuntimeManager.getInstance().onTaskCloudletFinished(task);
 				}
+
+				// Log task completion (this aggregates all metrics including cost and QoE)
+				SimLogger.getInstance().taskEnded(
+						task.getCloudletId(), CloudSim.clock(), task.getActualCPUTime());
 				break;
 			}
-			case RESERVED_VM_SUBMIT: {
-				submitTaskToReservedVm((Task) ev.getData());
+			case ASSIGNED_VM_SUBMIT: {
+				submitTaskToAssignedVm((Task) ev.getData());
 				break;
 			}
 			default:
@@ -364,13 +364,13 @@ public class DefaultMobileDeviceManager extends MobileDeviceManager {
 
 			double uploadDelaySec = uploadDelayByTaskId.remove(task.getCloudletId());
 			double estimatedDownloadDelaySec = getEstimatedDownloadDelay(networkModel, task);
-			double reservedDcWaitSec = 0.0;
 			if (DagRuntimeManager.getInstance() != null) {
-				double reservedDcWaitMs = DagRuntimeManager.getInstance().recordEstimatedReward(task, selectedVM.getMips(), activeCloudletsBeforeSubmit, uploadDelaySec, estimatedDownloadDelaySec);
-				reservedDcWaitSec = Math.max(0.0, reservedDcWaitMs / 1000.0);
+				DagRuntimeManager.getInstance().recordEstimatedReward(task,
+						selectedVM.getMips(), activeCloudletsBeforeSubmit, uploadDelaySec,
+						estimatedDownloadDelaySec);
 			}
 
-			schedule(getId(), delay + reservedDcWaitSec, RESERVED_VM_SUBMIT, task);
+			schedule(getId(), delay, ASSIGNED_VM_SUBMIT, task);
 		} else {
 			uploadDelayByTaskId.remove(task.getCloudletId());
 			SimLogger.getInstance().rejectedDueToVMCapacity(task.getCloudletId(), CloudSim.clock(),
@@ -379,18 +379,11 @@ public class DefaultMobileDeviceManager extends MobileDeviceManager {
 		}
 	}
 
-	private void submitTaskToReservedVm(Task task) {
+	private void submitTaskToAssignedVm(Task task) {
 		Vm selectedVM = findAssignedVm(task);
 		if (selectedVM == null) {
 			SimLogger.getInstance().rejectedDueToVMCapacity(task.getCloudletId(), CloudSim.clock(), getVmTypeForDatacenter(task.getAssociatedDatacenterId()));
 			notifyDagTaskFailed(task);
-			return;
-		}
-
-		int runningCloudlets = selectedVM.getCloudletScheduler().getCloudletExecList().size();
-		int waitingCloudlets = selectedVM.getCloudletScheduler().getCloudletWaitingList().size();
-		if (runningCloudlets > 0 || waitingCloudlets > 0) {
-			schedule(getId(), VM_SUBMIT_RETRY_DELAY, RESERVED_VM_SUBMIT, task);
 			return;
 		}
 

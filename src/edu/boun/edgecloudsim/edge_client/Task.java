@@ -34,6 +34,7 @@ public class Task extends Cloudlet {
 	private int datacenterId;
 	private String dagId;
 	private String dagTaskId;
+	private double vmQueueArrivalTimeMs = -1.0;
 
 	/**
 	 * Constructor for Task with specified parameters.
@@ -184,5 +185,13 @@ public class Task extends Cloudlet {
 
 	public void setDagTaskId(String _dagTaskId) {
 		dagTaskId = _dagTaskId;
+	}
+
+	public double getVmQueueArrivalTimeMs() {
+		return vmQueueArrivalTimeMs;
+	}
+
+	public void setVmQueueArrivalTimeMs(double _vmQueueArrivalTimeMs) {
+		vmQueueArrivalTimeMs = _vmQueueArrivalTimeMs;
 	}
 }

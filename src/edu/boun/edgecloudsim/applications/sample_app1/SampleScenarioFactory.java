@@ -88,8 +88,8 @@ public class SampleScenarioFactory implements ScenarioFactory {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
 				new edu.boun.edgecloudsim.dagsim.scheduling.EFTPolicy());
 		} else if (orchestratorPolicy.equalsIgnoreCase("RANDOM")) {
-			edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy randomPolicy = SS.hasRngSeed() ? new edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy(SS.getRngSeed()) : new edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy();
-			return new DagAwareOrchestrator(orchestratorPolicy, simScenario, randomPolicy);
+			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
+				new edu.boun.edgecloudsim.dagsim.scheduling.RandomPolicy());
 		} else if (orchestratorPolicy.equalsIgnoreCase("REMOTE_RL")) {
 			return new DagAwareOrchestrator(orchestratorPolicy, simScenario,
 				new edu.boun.edgecloudsim.dagsim.scheduling.RemoteRLPolicy(SS.getRlServiceUrl()));

@@ -40,6 +40,7 @@ public class TaskRecord {
     private double processingDelayMs;
     private double uploadDelayMs;
     private double downloadDelayMs;
+    private double actualExecutionTimeMs;
 
     // CloudSim/EdgeCloudSim cloudlet ID
     private long cloudletId;
@@ -230,6 +231,14 @@ public class TaskRecord {
 
     public void setProcessingDelayMs(double processingDelayMs) {
         this.processingDelayMs = processingDelayMs;
+    }
+
+    public double getActualExecutionTimeMs() {
+        return actualExecutionTimeMs;
+    }
+
+    public void setActualExecutionTimeMs(double actualExecutionTimeMs) {
+        this.actualExecutionTimeMs = actualExecutionTimeMs;
     }
 
     public double getUploadDelayMs() {

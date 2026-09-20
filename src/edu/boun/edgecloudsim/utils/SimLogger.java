@@ -233,6 +233,12 @@ public class SimLogger {
 	private double[] processingTimeOnCloud = null;
 	private double[] processingTimeOnEdge = null;
 	private double[] processingTimeOnMobile = null;
+	private double[] actualExecutionTime = null;
+	private double[] actualExecutionTimeOnCloud = null;
+	private double[] actualExecutionTimeOnEdge = null;
+	private int[] actualExecutionTimeCount = null;
+	private int[] actualExecutionTimeCountOnCloud = null;
+	private int[] actualExecutionTimeCountOnEdge = null;
 
 	private int[] failedTaskDueToVmCapacity = null;
 	private int[] failedTaskDueToVmCapacityOnCloud = null;
@@ -522,6 +528,12 @@ public class SimLogger {
 		processingTimeOnCloud = new double[numOfAppTypes + 1];
 		processingTimeOnEdge = new double[numOfAppTypes + 1];
 		processingTimeOnMobile = new double[numOfAppTypes + 1];
+		actualExecutionTime = new double[numOfAppTypes + 1];
+		actualExecutionTimeOnCloud = new double[numOfAppTypes + 1];
+		actualExecutionTimeOnEdge = new double[numOfAppTypes + 1];
+		actualExecutionTimeCount = new int[numOfAppTypes + 1];
+		actualExecutionTimeCountOnCloud = new int[numOfAppTypes + 1];
+		actualExecutionTimeCountOnEdge = new int[numOfAppTypes + 1];
 
 		failedTaskDueToVmCapacity = new int[numOfAppTypes + 1];
 		failedTaskDueToVmCapacityOnCloud = new int[numOfAppTypes + 1];
@@ -633,6 +645,11 @@ public class SimLogger {
 	 */
 	public void taskEnded(int taskId, double time) {
 		taskMap.get(taskId).taskEnded(time);
+		recordLog(taskId);
+	}
+
+	public void taskEnded(int taskId, double time, double actualExecutionTime) {
+		taskMap.get(taskId).taskEnded(time, actualExecutionTime);
 		recordLog(taskId);
 	}
 
@@ -900,6 +917,12 @@ public class SimLogger {
 		processingTimeOnCloud[numOfAppTypes] = DoubleStream.of(processingTimeOnCloud).sum();
 		processingTimeOnEdge[numOfAppTypes] = DoubleStream.of(processingTimeOnEdge).sum();
 		processingTimeOnMobile[numOfAppTypes] = DoubleStream.of(processingTimeOnMobile).sum();
+		actualExecutionTime[numOfAppTypes] = DoubleStream.of(actualExecutionTime).sum();
+		actualExecutionTimeOnCloud[numOfAppTypes] = DoubleStream.of(actualExecutionTimeOnCloud).sum();
+		actualExecutionTimeOnEdge[numOfAppTypes] = DoubleStream.of(actualExecutionTimeOnEdge).sum();
+		actualExecutionTimeCount[numOfAppTypes] = IntStream.of(actualExecutionTimeCount).sum();
+		actualExecutionTimeCountOnCloud[numOfAppTypes] = IntStream.of(actualExecutionTimeCountOnCloud).sum();
+		actualExecutionTimeCountOnEdge[numOfAppTypes] = IntStream.of(actualExecutionTimeCountOnEdge).sum();
 
 		failedTaskDueToVmCapacity[numOfAppTypes] = IntStream.of(failedTaskDueToVmCapacity).sum();
 		failedTaskDueToVmCapacityOnCloud[numOfAppTypes] = IntStream.of(failedTaskDueToVmCapacityOnCloud).sum();
@@ -1104,6 +1127,13 @@ public class SimLogger {
 							+ completedTask[i] + "("
 							+ completedTaskOnEdge[i] + "/"
 							+ completedTaskOnCloud[i] + ")");
+					if (actualExecutionTimeCount[i] > 0) {
+						printLine("task average actual execution time (Edge/Cloud): "
+								+ averageActualExecutionTime(actualExecutionTimeOnEdge[i], actualExecutionTimeCountOnEdge[i])
+								+ "/"
+								+ averageActualExecutionTime(actualExecutionTimeOnCloud[i], actualExecutionTimeCountOnCloud[i])
+								+ " seconds");
+					}
 
 					printLine("---------------------------------------");
 				}
@@ -1249,6 +1279,13 @@ public class SimLogger {
 		apDelayList.clear();
 	}
 
+	private String averageActualExecutionTime(double totalSeconds, int count) {
+		if (count == 0) {
+			return "None";
+		}
+		return String.format("%.6f", totalSeconds / (double) count);
+	}
+
 	/**
 	 * Processes and aggregates completed task metrics into summary statistics.
 	 * 
@@ -1313,6 +1350,10 @@ public class SimLogger {
 			serviceTime[value.getTaskType()] += value.getServiceTime();
 			networkDelay[value.getTaskType()] += value.getNetworkDelay();
 			processingTime[value.getTaskType()] += (value.getServiceTime() - value.getNetworkDelay());
+			if (value.hasActualExecutionTime()) {
+				actualExecutionTime[value.getTaskType()] += value.getActualExecutionTime();
+				actualExecutionTimeCount[value.getTaskType()]++;
+			}
 			orchestratorOverhead[value.getTaskType()] += value.getOrchestratorOverhead();
 
 			if (value.getNetworkDelay(NETWORK_DELAY_TYPES.WLAN_DELAY) != 0) {
@@ -1335,12 +1376,20 @@ public class SimLogger {
 			if (value.getVmType() == SimSettings.VM_TYPES.CLOUD_VM.ordinal()) {
 				serviceTimeOnCloud[value.getTaskType()] += value.getServiceTime();
 				processingTimeOnCloud[value.getTaskType()] += (value.getServiceTime() - value.getNetworkDelay());
+				if (value.hasActualExecutionTime()) {
+					actualExecutionTimeOnCloud[value.getTaskType()] += value.getActualExecutionTime();
+					actualExecutionTimeCountOnCloud[value.getTaskType()]++;
+				}
 			} else if (value.getVmType() == SimSettings.VM_TYPES.MOBILE_VM.ordinal()) {
 				serviceTimeOnMobile[value.getTaskType()] += value.getServiceTime();
 				processingTimeOnMobile[value.getTaskType()] += value.getServiceTime();
 			} else {
 				serviceTimeOnEdge[value.getTaskType()] += value.getServiceTime();
 				processingTimeOnEdge[value.getTaskType()] += (value.getServiceTime() - value.getNetworkDelay());
+				if (value.hasActualExecutionTime()) {
+					actualExecutionTimeOnEdge[value.getTaskType()] += value.getActualExecutionTime();
+					actualExecutionTimeCountOnEdge[value.getTaskType()]++;
+				}
 			}
 		} else if (value.getStatus() == SimLogger.TASK_STATUS.REJECTED_DUE_TO_VM_CAPACITY) {
 			failedTaskDueToVmCapacity[value.getTaskType()]++;
@@ -1568,6 +1617,8 @@ class LogItem {
 	private int taskOutputSize;
 	private double taskStartTime;
 	private double taskEndTime;
+	private double actualExecutionTime;
+	private boolean actualExecutionTimeRecorded;
 	private double lanUploadDelay;
 	private double manUploadDelay;
 	private double wanUploadDelay;
@@ -1640,6 +1691,12 @@ class LogItem {
 	public void taskEnded(double time) {
 		taskEndTime = time;
 		status = SimLogger.TASK_STATUS.COMLETED;
+	}
+
+	public void taskEnded(double time, double actualExecutionTime) {
+		taskEnded(time);
+		this.actualExecutionTime = actualExecutionTime;
+		actualExecutionTimeRecorded = true;
 	}
 
 	public void taskRejectedDueToVMCapacity(double time, int _vmType) {
@@ -1804,6 +1861,14 @@ class LogItem {
 
 	public int getTaskType() {
 		return taskType;
+	}
+
+	public double getActualExecutionTime() {
+		return actualExecutionTime;
+	}
+
+	public boolean hasActualExecutionTime() {
+		return actualExecutionTimeRecorded;
 	}
 
 	public String toString(int taskId) {
