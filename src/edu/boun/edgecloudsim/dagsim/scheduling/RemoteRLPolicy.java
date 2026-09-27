@@ -24,10 +24,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * via HTTP/JSON.
  */
 public class RemoteRLPolicy implements SchedulingPolicy {
+    private static final int ROUTE_DEBUG_TASK_LIMIT = 5;
+
     private final String serviceUrl;
     private final String actUrl;
     private final Gson gson;
     private final int timeoutMs;
+    private int routeDebugTaskCount = 0;
 
     private static final Gson STATIC_GSON = new Gson();
     private static final Map<String, DecisionTrace> TRACE_BY_TASK = new ConcurrentHashMap<>();
@@ -81,6 +84,7 @@ public class RemoteRLPolicy implements SchedulingPolicy {
             }
 
             applyRewardBounds(decisionObj);
+            logRouteDecision(task, state, tier, datacenterId, vmId);
 
             if (task.dagId != null && task.taskId != null) {
                 JsonObject actionObj = new JsonObject();
@@ -128,6 +132,58 @@ public class RemoteRLPolicy implements SchedulingPolicy {
 
             return fallback;
         }
+    }
+
+    private void logRouteDecision(
+            TaskContext task,
+            ClusterState state,
+            int selectedTier,
+            int selectedDc,
+            int selectedVm) {
+        if (routeDebugTaskCount >= ROUTE_DEBUG_TASK_LIMIT || state.vms == null) {
+            return;
+        }
+
+        ClusterState.VMInfo[][] edgeDcs = state.vms[PlacementDecision.TIER_EDGE];
+        if (edgeDcs != null) {
+            for (ClusterState.VMInfo[] dcVms : edgeDcs) {
+                ClusterState.VMInfo vm = firstVm(dcVms);
+                if (vm == null) {
+                    continue;
+                }
+                System.out.printf(
+                        "[RL_ROUTE] task=%s sourceLocation=%d edgeDc=%d targetLocation=%d interDcHops=%d propagationHops=%d uploadMs=%.3f downloadMs=%.3f%n",
+                        task.taskId,
+                        vm.sourceLocationId,
+                        vm.datacenterId,
+                        vm.targetLocationId,
+                        vm.interDcHops,
+                        vm.interDcHops < 0 ? -1 : vm.interDcHops + 1,
+                        vm.estimatedUploadDelayMs,
+                        vm.estimatedDownloadDelayMs);
+            }
+        }
+
+        String tierName = selectedTier == PlacementDecision.TIER_CLOUD ? "CLOUD" : "EDGE";
+        System.out.printf(
+                "[RL_ROUTE] selected task=%s tier=%s dc=%d vm=%d%n",
+                task.taskId,
+                tierName,
+                selectedDc,
+                selectedVm);
+        routeDebugTaskCount++;
+    }
+
+    private ClusterState.VMInfo firstVm(ClusterState.VMInfo[] vms) {
+        if (vms == null) {
+            return null;
+        }
+        for (ClusterState.VMInfo vm : vms) {
+            if (vm != null) {
+                return vm;
+            }
+        }
+        return null;
     }
 
     private void applyRewardBounds(JsonObject decisionObj) {
@@ -516,4 +572,5 @@ public class RemoteRLPolicy implements SchedulingPolicy {
         trace.selectedDcMaxQueueLen = maxQueue;
         trace.selectedDcAvgUtilization = vmCount > 0 ? utilSum / (double) vmCount : 0.0;
     }
+
 }

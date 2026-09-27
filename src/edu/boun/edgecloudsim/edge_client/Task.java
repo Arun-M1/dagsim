@@ -32,6 +32,7 @@ public class Task extends Cloudlet {
 	private int hostIndex;
 	private int vmIndex;
 	private int datacenterId;
+	private int edgeDcIndex = -1;
 	private String dagId;
 	private String dagTaskId;
 	private double vmQueueArrivalTimeMs = -1.0;
@@ -133,6 +134,15 @@ public class Task extends Cloudlet {
 	 */
 	public int getAssociatedDatacenterId() {
 		return datacenterId;
+	}
+
+	/** Edge datacenter list index selected before the task upload begins. */
+	public void setEdgeDcIndex(int _edgeDcIndex) {
+		edgeDcIndex = _edgeDcIndex;
+	}
+
+	public int getEdgeDcIndex() {
+		return edgeDcIndex;
 	}
 
 	/**

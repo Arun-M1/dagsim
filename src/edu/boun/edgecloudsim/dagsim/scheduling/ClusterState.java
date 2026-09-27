@@ -19,6 +19,10 @@ public class ClusterState {
         public double estimatedUploadDelayMs;
         public double estimatedDownloadDelayMs;
         public double estimatedProcessingTimeMs;
+        // Route metadata used only to verify location-aware edge delays.
+        public int sourceLocationId;
+        public int targetLocationId;
+        public int interDcHops;
         public double costPerBw;
         public double costPerSec;
 
@@ -35,6 +39,9 @@ public class ClusterState {
             this.estimatedUploadDelayMs = 0;
             this.estimatedDownloadDelayMs = 0;
             this.estimatedProcessingTimeMs = 0;
+            this.sourceLocationId = -1;
+            this.targetLocationId = -1;
+            this.interDcHops = -1;
             this.costPerBw = 0;
             this.costPerSec = 0;
         }

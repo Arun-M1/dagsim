@@ -42,6 +42,8 @@ ROLE_GLOBAL = np.array([0.0, 0.0, 1.0], dtype=np.float32)
 # Reservation waits can grow with workload size. This is only a soft reference
 # scale for log normalization, not a hard cap.
 WAIT_TIME_SCALE = 600_000.0
+# Shared across tiers so capacity changes remain comparable in every experiment.
+MIPS_NORMALIZATION_REFERENCE = 1_000_000_000.0
 
 DC_SHORTEST_WAIT_TIME = 7
 DC_BUSY_VM = 8
@@ -122,11 +124,10 @@ def dc_node_features(vm_list: list, dc_id: int, is_edge: bool) -> np.ndarray:
 
     shortest_wait_time, busy_vm_fraction = reservation_wait_stats(dc_vms)
 
-    # Edge and cloud have very different MIPS scales.
-    mips_divisor = 20_000.0 if is_edge else 12_800_000.0
-
     features = np.zeros(NUM_NODE_CONTENT_FEATURES, dtype=np.float32)
-    features[0] = clip_norm(total_mips, mips_divisor)
+    features[0] = float(np.clip(
+        log_norm(total_mips, MIPS_NORMALIZATION_REFERENCE), 0.0, 1.0
+    ))
     features[1] = float(np.clip(avg_util, 0.0, 1.0))
     features[2] = log_norm(total_queue, 5000.0)
     features[3] = 1.0 if is_edge else 0.0

@@ -8,7 +8,9 @@ import edu.boun.edgecloudsim.dagsim.DagRuntimeManager;
 import edu.boun.edgecloudsim.dagsim.scheduling.*;
 import edu.boun.edgecloudsim.cloud_server.CloudVM;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
+import edu.boun.edgecloudsim.network.MM1Queue;
 import edu.boun.edgecloudsim.network.NetworkModel;
+import edu.boun.edgecloudsim.utils.Location;
 import org.cloudbus.cloudsim.core.CloudSim;
 
 import java.util.List;
@@ -37,8 +39,10 @@ public class DagAwareOrchestrator extends EdgeOrchestrator {
         PlacementDecision decision = getOrCreatePolicyDecision(task);
 
         if (decision.destTier == PlacementDecision.TIER_CLOUD) {
+            task.setEdgeDcIndex(-1);
             return SimSettings.CLOUD_DATACENTER_ID;
         } else {
+            task.setEdgeDcIndex(decision.destDatacenterId);
             return SimSettings.GENERIC_EDGE_DEVICE_ID;
         }
     }
@@ -144,14 +148,14 @@ public class DagAwareOrchestrator extends EdgeOrchestrator {
                 EdgeVM curEdgeVm = edgeVms.get(vmIdx);
                 ClusterState.VMInfo vmInfo = new ClusterState.VMInfo(curEdgeVm.getId(), dc, PlacementDecision.TIER_EDGE, curEdgeVm.getMips());
                 vmInfo.queuedTaskCount = curEdgeVm.getCloudletScheduler().getCloudletExecList().size();
+                int dcId = curEdgeVm.getHost().getDatacenter().getId();
                 if (drm != null) {
-                    int vmDatacenterId = curEdgeVm.getHost().getDatacenter().getId();
-                    vmInfo.estimatedAvailableTimeMs = drm.getEstimatedAvailableVmTimeMs(vmDatacenterId, curEdgeVm.getId());
+                    vmInfo.estimatedAvailableTimeMs = drm.getEstimatedAvailableVmTimeMs(dcId, curEdgeVm.getId());
                     vmInfo.estimatedWaitTimeMs = Math.max(0.0, vmInfo.estimatedAvailableTimeMs - state.currentTimeMs);
                 }
-                applyNetworkDelays(vmInfo, task, networkModel, SimSettings.GENERIC_EDGE_DEVICE_ID, curEdgeVm.getHost().getDatacenter().getId());
+                applyNetworkDelays(vmInfo, task, networkModel, dc, dc);
                 applyProcessingTime(vmInfo, task);
-                applyDatacenterCosts(vmInfo, curEdgeVm.getHost().getDatacenter().getId());
+                applyDatacenterCosts(vmInfo, dcId);
                 state.vms[PlacementDecision.TIER_EDGE][dc][vmIdx] = vmInfo;
             }
         }
@@ -185,6 +189,15 @@ public class DagAwareOrchestrator extends EdgeOrchestrator {
 
         vmInfo.estimatedUploadDelayMs = networkModel.getUploadDelay(task.getMobileDeviceId(), uploadDestId, task) * 1000.0;
         vmInfo.estimatedDownloadDelayMs = networkModel.getDownloadDelay(downloadSourceId, task.getMobileDeviceId(), task) * 1000.0;
+
+        if (vmInfo.tier == PlacementDecision.TIER_EDGE && networkModel instanceof MM1Queue) {
+            Location curLocation = SimManager.getInstance().getMobilityModel()
+                    .getLocation(task.getMobileDeviceId(), CloudSim.clock());
+            MM1Queue queue = (MM1Queue) networkModel;
+            vmInfo.sourceLocationId = curLocation.getServingWlanId();
+            vmInfo.targetLocationId = queue.getEdgeDcLocationId(uploadDestId);
+            vmInfo.interDcHops = queue.getEdgeRouteHops(curLocation, uploadDestId);
+        }
     }
 
     private static void applyProcessingTime(ClusterState.VMInfo vmInfo, Task task) {

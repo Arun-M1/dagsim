@@ -92,6 +92,7 @@ public class SimSettings {
 
 	// Network delay and bandwidth parameters (converted from properties file units)
 	private double EDGE_PROPAGATION_DELAY; // Edge datacenter propagation delay (seconds)
+	private double EDGE_PROPAGATION_DELAY_PER_HOP; // Edge topology propagation delay per hop (seconds)
 	private double WAN_PROPAGATION_DELAY; // Wide Area Network delay (seconds)
 	private double GSM_PROPAGATION_DELAY; // GSM network delay (seconds)
 	private double LAN_INTERNAL_DELAY; // Local Area Network delay (seconds)
@@ -104,7 +105,7 @@ public class SimSettings {
 	private int NUM_OF_HOST_ON_CLOUD_DATACENTER;
 	private int NUM_OF_VM_ON_CLOUD_HOST;
 	private int CORE_FOR_CLOUD_VM; // CPU cores for cloud VMs
-	private int MIPS_FOR_CLOUD_VM; // Processing power (MIPS)
+	private double MIPS_FOR_CLOUD_VM; // Processing power (MIPS)
 	private int RAM_FOR_CLOUD_VM; // Memory allocation (MB)
 	private int STORAGE_FOR_CLOUD_VM; // Storage allocation (Bytes)
 	private double ALIBABA_MIPS; // Reference CPU speed used to convert Alibaba-derived durations to MI
@@ -244,7 +245,10 @@ public class SimSettings {
 			MOBILE_DEVICE_COUNTER_SIZE = Integer.parseInt(prop.getProperty("mobile_device_counter_size"));
 			WLAN_RANGE = Integer.parseInt(prop.getProperty("wlan_range", "0"));
 
-			EDGE_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("edge_propagation_delay", "0"));
+			String edgePropagationDelay = prop.getProperty("edge_propagation_delay", "0");
+			EDGE_PROPAGATION_DELAY = Double.parseDouble(edgePropagationDelay);
+			EDGE_PROPAGATION_DELAY_PER_HOP = Double.parseDouble(
+					prop.getProperty("edge_propagation_delay_per_hop", edgePropagationDelay));
 			WAN_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("wan_propagation_delay", "0"));
 			GSM_PROPAGATION_DELAY = Double.parseDouble(prop.getProperty("gsm_propagation_delay", "0"));
 			LAN_INTERNAL_DELAY = Double.parseDouble(prop.getProperty("lan_internal_delay", "0"));
@@ -256,7 +260,7 @@ public class SimSettings {
 			NUM_OF_HOST_ON_CLOUD_DATACENTER = Integer.parseInt(prop.getProperty("number_of_host_on_cloud_datacenter"));
 			NUM_OF_VM_ON_CLOUD_HOST = Integer.parseInt(prop.getProperty("number_of_vm_on_cloud_host"));
 			CORE_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("core_for_cloud_vm"));
-			MIPS_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("mips_for_cloud_vm"));
+			MIPS_FOR_CLOUD_VM = Double.parseDouble(prop.getProperty("mips_for_cloud_vm"));
 			RAM_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("ram_for_cloud_vm"));
 			STORAGE_FOR_CLOUD_VM = Integer.parseInt(prop.getProperty("storage_for_cloud_vm"));
 			ALIBABA_MIPS = Double.parseDouble(prop.getProperty("alibaba_mips", "100"));
@@ -422,6 +426,13 @@ public class SimSettings {
 	}
 
 	/**
+	 * returns edge topology propagation delay per hop (in second unit)
+	 */
+	public double getEdgePropagationDelayPerHop() {
+		return EDGE_PROPAGATION_DELAY_PER_HOP;
+	}
+
+	/**
 	 * returns WAN propagation delay (in second unit) from properties file
 	 */
 	public double getWanPropagationDelay() {
@@ -558,7 +569,7 @@ public class SimSettings {
 	/**
 	 * returns MIPS of the central cloud VMs
 	 */
-	public int getMipsForCloudVM() {
+	public double getMipsForCloudVM() {
 		return MIPS_FOR_CLOUD_VM;
 	}
 

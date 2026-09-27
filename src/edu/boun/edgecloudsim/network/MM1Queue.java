@@ -66,6 +66,9 @@ public class MM1Queue extends NetworkModel {
 	/** Maximum number of concurrent clients observed at any location (for debugging) */
 	private int maxNumOfClientsInPlace;
 
+	/** Optional edge network used by configurations that define edge links. */
+	private EdgeNetwork edgeNetwork;
+
 	/**
 	 * Constructs a new M/M/1 Queue network model instance.
 	 * 
@@ -110,6 +113,9 @@ public class MM1Queue extends NetworkModel {
 		// Calculate weighted average inter-arrival times and task sizes from task lookup table
 		double numOfTaskType = 0;
 		SimSettings SS = SimSettings.getInstance();
+		if (SS.getEdgeDevicesDocument().getElementsByTagName("link").getLength() > 0) {
+			edgeNetwork = new EdgeNetwork(SS.getEdgeDevicesDocument());
+		}
 		
 		// Iterate through all defined task types in the simulation configuration
 		for (int i = 0; i < SimSettings.getInstance().getTaskLookUpTable().length; i++) {
@@ -183,10 +189,13 @@ public class MM1Queue extends NetworkModel {
 					SimSettings.getInstance().getEdgePropagationDelay() +
 					SimSettings.getInstance().getInternalLanDelay();
 		}
-		// Case 3: Mobile device uploading to edge device (single-hop WLAN)
-		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID) {
-			delay = getWlanUploadDelay(accessPointLocation, CloudSim.clock()) +
-					SimSettings.getInstance().getEdgePropagationDelay();
+		// Case 3: Mobile device uploading to an edge datacenter
+		else {
+			double wlanDelay = getWlanUploadDelay(accessPointLocation, CloudSim.clock());
+			double edgeDelay = destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID
+					? getLocalEdgeDelay()
+					: getEdgeRouteDelay(accessPointLocation, destDeviceId);
+			delay = wlanDelay + edgeDelay;
 		}
 
 		return delay;
@@ -236,36 +245,73 @@ public class MM1Queue extends NetworkModel {
 			if(wlanDelay > 0 && wanDelay > 0)
 				delay = wlanDelay + wanDelay;
 		}
-		// Case 2: Edge device downloading results to mobile device
+		// Case 2: Edge datacenter downloading results to mobile device
 		else{
-			// Base WLAN and edge propagation delay from edge datacenter to mobile device
-			delay = getWlanDownloadDelay(accessPointLocation, CloudSim.clock()) +
-					SimSettings.getInstance().getEdgePropagationDelay();
-
-			// Resolve source edge datacenter either as list index or datacenter entity ID.
-			Datacenter sourceDc = resolveEdgeDatacenter(sourceDeviceId);
-			if (sourceDc == null || sourceDc.getHostList().isEmpty()) {
-				return delay;
-			}
-			EdgeHost host = (EdgeHost) sourceDc.getHostList().get(0);
-
-			// Check if source edge server is in a different location than destination mobile device
-			// If so, add inter-edge routing delay (round-trip through network infrastructure)
-			// Note: In this scenario, serving WLAN ID equals host ID (one host per location)
-			if(host.getLocation().getServingWlanId() != accessPointLocation.getServingWlanId())
-				delay += (SimSettings.getInstance().getInternalLanDelay() * 2);
+			delay = getWlanDownloadDelay(accessPointLocation, CloudSim.clock())
+					+ getEdgeRouteDelay(accessPointLocation, sourceDeviceId);
 		}
 
 		return delay;
 	}
 
-	private Datacenter resolveEdgeDatacenter(int sourceDeviceId){
+	private double getEdgeRouteDelay(Location curLocation, int dcId) {
+		Datacenter dc = resolveEdgeDatacenter(dcId);
+		if (dc == null || dc.getHostList().isEmpty()) {
+			return getLocalEdgeDelay();
+		}
+
+		EdgeHost host = (EdgeHost) dc.getHostList().get(0);
+		int curId = curLocation.getServingWlanId();
+		int targetId = host.getLocation().getServingWlanId();
+
+		if (edgeNetwork == null) {
+			double delay = SimSettings.getInstance().getEdgePropagationDelay();
+			if (curId != targetId) {
+				delay += SimSettings.getInstance().getInternalLanDelay() * 2;
+			}
+			return delay;
+		}
+
+		int hops = 1 + edgeNetwork.getLeastHops(curId, targetId);
+		return hops * SimSettings.getInstance().getEdgePropagationDelayPerHop();
+	}
+
+	/** Returns the number of links between the current location and an edge datacenter. */
+	public int getEdgeRouteHops(Location curLocation, int dcId) {
+		Datacenter dc = resolveEdgeDatacenter(dcId);
+		if (edgeNetwork == null || dc == null || dc.getHostList().isEmpty()) {
+			return -1;
+		}
+
+		EdgeHost host = (EdgeHost) dc.getHostList().get(0);
+		return edgeNetwork.getLeastHops(
+				curLocation.getServingWlanId(),
+				host.getLocation().getServingWlanId());
+	}
+
+	/** Returns the wlan_id used as the edge datacenter's graph location. */
+	public int getEdgeDcLocationId(int dcId) {
+		Datacenter dc = resolveEdgeDatacenter(dcId);
+		if (dc == null || dc.getHostList().isEmpty()) {
+			return -1;
+		}
+		EdgeHost host = (EdgeHost) dc.getHostList().get(0);
+		return host.getLocation().getServingWlanId();
+	}
+
+	private double getLocalEdgeDelay() {
+		return edgeNetwork == null
+				? SimSettings.getInstance().getEdgePropagationDelay()
+				: SimSettings.getInstance().getEdgePropagationDelayPerHop();
+	}
+
+	private Datacenter resolveEdgeDatacenter(int dcId){
 		java.util.List<Datacenter> dcs = SimManager.getInstance().getEdgeServerManager().getDatacenterList();
-		if (sourceDeviceId >= 0 && sourceDeviceId < dcs.size()) {
-			return dcs.get(sourceDeviceId);
+		if (dcId >= 0 && dcId < dcs.size()) {
+			return dcs.get(dcId);
 		}
 		for (Datacenter dc : dcs) {
-			if (dc.getId() == sourceDeviceId) {
+			if (dc.getId() == dcId) {
 				return dc;
 			}
 		}
