@@ -148,6 +148,8 @@ public class DagAwareOrchestrator extends EdgeOrchestrator {
                 EdgeVM curEdgeVm = edgeVms.get(vmIdx);
                 ClusterState.VMInfo vmInfo = new ClusterState.VMInfo(curEdgeVm.getId(), dc, PlacementDecision.TIER_EDGE, curEdgeVm.getMips());
                 vmInfo.queuedTaskCount = curEdgeVm.getCloudletScheduler().getCloudletExecList().size();
+                vmInfo.waitingTaskCount = curEdgeVm.getCloudletScheduler().getCloudletWaitingList().size();
+                vmInfo.totalTaskCount = vmInfo.queuedTaskCount + vmInfo.waitingTaskCount;
                 int dcId = curEdgeVm.getHost().getDatacenter().getId();
                 if (drm != null) {
                     vmInfo.estimatedAvailableTimeMs = drm.getEstimatedAvailableVmTimeMs(dcId, curEdgeVm.getId());
@@ -168,6 +170,8 @@ public class DagAwareOrchestrator extends EdgeOrchestrator {
             CloudVM curCloudVm = cloudVms.get(vmIdx);
             ClusterState.VMInfo vmInfo = new ClusterState.VMInfo(curCloudVm.getId(), 0, PlacementDecision.TIER_CLOUD, curCloudVm.getMips());
             vmInfo.queuedTaskCount = curCloudVm.getCloudletScheduler().getCloudletExecList().size();
+            vmInfo.waitingTaskCount = curCloudVm.getCloudletScheduler().getCloudletWaitingList().size();
+            vmInfo.totalTaskCount = vmInfo.queuedTaskCount + vmInfo.waitingTaskCount;
             if (drm != null) {
                 vmInfo.estimatedAvailableTimeMs = drm.getEstimatedAvailableVmTimeMs(SimSettings.CLOUD_DATACENTER_ID, curCloudVm.getId());
                 vmInfo.estimatedWaitTimeMs = Math.max(0.0, vmInfo.estimatedAvailableTimeMs - state.currentTimeMs);

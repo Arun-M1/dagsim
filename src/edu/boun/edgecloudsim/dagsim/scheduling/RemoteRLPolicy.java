@@ -38,11 +38,14 @@ public class RemoteRLPolicy implements SchedulingPolicy {
     public static class DecisionTrace {
         public JsonObject state;
         public JsonObject action;
-        public int selectedDcVmCount = -1;
-        public int selectedDcQueueLen = -1;
-        public double selectedDcAvgQueueLen = -1.0;
-        public double selectedDcMaxQueueLen = -1.0;
-        public double selectedDcAvgUtilization = -1.0;
+        public int edgeTotalWaitingTaskCount = -1;
+        public double edgeAvgWaitingTasksPerVm = -1.0;
+        public int edgeMaxWaitingTasksPerVm = -1;
+        public int cloudTotalWaitingTaskCount = -1;
+        public double cloudAvgWaitingTasksPerVm = -1.0;
+        public int cloudMaxWaitingTasksPerVm = -1;
+        public int selectedVmWaitingTaskCount = -1;
+        public int selectedVmTotalTaskCount = -1;
     }
 
     public RemoteRLPolicy(String serviceUrl) {
@@ -97,7 +100,8 @@ public class RemoteRLPolicy implements SchedulingPolicy {
                 DecisionTrace trace = new DecisionTrace();
                 trace.state = stateJson;
                 trace.action = actionObj;
-                populateSelectedDcStats(trace, state, tier, datacenterId);
+                populateTierQueueMetrics(trace, state);
+                populateSelectedVmQueueMetrics(trace, state, tier, datacenterId, vmId);
                 TRACE_BY_TASK.put(key(task.dagId, task.taskId), trace);
             }
 
@@ -126,7 +130,13 @@ public class RemoteRLPolicy implements SchedulingPolicy {
                 DecisionTrace trace = new DecisionTrace();
                 trace.state = stateJson;
                 trace.action = actionObj;
-                populateSelectedDcStats(trace, state, fallback.destTier, fallback.destDatacenterId);
+                populateTierQueueMetrics(trace, state);
+                populateSelectedVmQueueMetrics(
+                        trace,
+                        state,
+                        fallback.destTier,
+                        fallback.destDatacenterId,
+                        fallback.destVmId);
                 TRACE_BY_TASK.put(key(task.dagId, task.taskId), trace);
             }
 
@@ -529,7 +539,60 @@ public class RemoteRLPolicy implements SchedulingPolicy {
         return best != null ? best.vmId : dcVms[0].vmId;
     }
 
-    private static void populateSelectedDcStats(DecisionTrace trace, ClusterState state, int tier, int datacenterId) {
+    private static class TierQueueStats {
+        private int vmCount;
+        private int totalWaiting;
+        private int maxWaiting;
+
+        private double averageWaitingPerVm() {
+            return vmCount > 0 ? totalWaiting / (double) vmCount : 0.0;
+        }
+    }
+
+    private static void populateTierQueueMetrics(DecisionTrace trace, ClusterState state) {
+        if (trace == null || state == null || state.vms == null) {
+            return;
+        }
+
+        TierQueueStats edge = getTierQueueStats(state, PlacementDecision.TIER_EDGE);
+        trace.edgeTotalWaitingTaskCount = edge.totalWaiting;
+        trace.edgeAvgWaitingTasksPerVm = edge.averageWaitingPerVm();
+        trace.edgeMaxWaitingTasksPerVm = edge.maxWaiting;
+
+        TierQueueStats cloud = getTierQueueStats(state, PlacementDecision.TIER_CLOUD);
+        trace.cloudTotalWaitingTaskCount = cloud.totalWaiting;
+        trace.cloudAvgWaitingTasksPerVm = cloud.averageWaitingPerVm();
+        trace.cloudMaxWaitingTasksPerVm = cloud.maxWaiting;
+    }
+
+    private static TierQueueStats getTierQueueStats(ClusterState state, int tier) {
+        TierQueueStats stats = new TierQueueStats();
+        if (tier < 0 || tier >= state.vms.length || state.vms[tier] == null) {
+            return stats;
+        }
+
+        for (ClusterState.VMInfo[] dcVms : state.vms[tier]) {
+            if (dcVms == null) {
+                continue;
+            }
+            for (ClusterState.VMInfo vm : dcVms) {
+                if (vm == null) {
+                    continue;
+                }
+                stats.vmCount++;
+                stats.totalWaiting += vm.waitingTaskCount;
+                stats.maxWaiting = Math.max(stats.maxWaiting, vm.waitingTaskCount);
+            }
+        }
+        return stats;
+    }
+
+    private static void populateSelectedVmQueueMetrics(
+            DecisionTrace trace,
+            ClusterState state,
+            int tier,
+            int datacenterId,
+            int vmId) {
         if (trace == null || state == null || state.vms == null) {
             return;
         }
@@ -541,36 +604,16 @@ public class RemoteRLPolicy implements SchedulingPolicy {
         }
 
         ClusterState.VMInfo[] dcVms = state.vms[tier][datacenterId];
-        if (dcVms == null || dcVms.length == 0) {
-            trace.selectedDcVmCount = 0;
-            trace.selectedDcQueueLen = 0;
-            trace.selectedDcAvgQueueLen = 0.0;
-            trace.selectedDcMaxQueueLen = 0.0;
-            trace.selectedDcAvgUtilization = 0.0;
+        if (dcVms == null) {
             return;
         }
-
-        int vmCount = 0;
-        int totalQueue = 0;
-        int maxQueue = 0;
-        double utilSum = 0.0;
         for (ClusterState.VMInfo vm : dcVms) {
-            if (vm == null) {
-                continue;
+            if (vm != null && vm.vmId == vmId) {
+                trace.selectedVmWaitingTaskCount = vm.waitingTaskCount;
+                trace.selectedVmTotalTaskCount = vm.totalTaskCount;
+                return;
             }
-            vmCount++;
-            totalQueue += vm.queuedTaskCount;
-            maxQueue = Math.max(maxQueue, vm.queuedTaskCount);
-            double util = vm.queuedTaskCount <= 0 ? 0.0
-                    : Math.min(1.0, vm.queuedTaskCount / (double) (vm.queuedTaskCount + 1));
-            utilSum += util;
         }
-
-        trace.selectedDcVmCount = vmCount;
-        trace.selectedDcQueueLen = totalQueue;
-        trace.selectedDcAvgQueueLen = vmCount > 0 ? totalQueue / (double) vmCount : 0.0;
-        trace.selectedDcMaxQueueLen = maxQueue;
-        trace.selectedDcAvgUtilization = vmCount > 0 ? utilSum / (double) vmCount : 0.0;
     }
 
 }

@@ -981,7 +981,7 @@ public class DagRuntimeManager extends SimEntity {
     private void writeRewardLogHeader() {
         rewardLogWriter.println(
                 // "sim_time_ms,dag_id,task_id,task_type,tier,datacenter_id,vm_id,ready_ms,scheduled_ms,start_ms,finish_ms,latency_ms,queue_wait_ms,network_ms,bw_cost,cpu_cost,actual_cost,cost_source,cost_so_far,budget,latency_term,cost_term,budget_penalty,reward,budget_violated");
-                "sim_time_ms,dag_id,task_id,task_type,tier,datacenter_id,vm_id,ready_ms,scheduled_ms,start_ms,finish_ms,ready_wait_ms,latency_ms,queue_wait_ms,network_ms,selected_dc_vm_count,selected_dc_queue_len,selected_dc_avg_queue_len,selected_dc_max_queue_len,selected_dc_avg_utilization,estimated_latency_ms,estimated_cost,estimated_reward,estimate_latency_error_ms,estimate_cost_error,estimate_reward_error,estimated_upload_delay_ms,estimated_processing_time_ms,estimated_download_delay_ms,estimate_vm_active_cloudlets,task_ready_at_dc_ms,reserved_vm_id,predicted_vm_available_time_ms,reserved_vm_start_ms,reserved_vm_finish_ms,reserved_dc_wait_ms,reserved_estimated_response_done_ms,reserved_estimated_latency_ms,bw_cost,cpu_cost,actual_cost,cost_source,cost_so_far,budget,latency_term,cost_term,budget_penalty,reward,budget_violated");
+                "sim_time_ms,dag_id,task_id,task_type,tier,datacenter_id,vm_id,ready_ms,scheduled_ms,start_ms,finish_ms,ready_wait_ms,latency_ms,queue_wait_ms,network_ms,edge_total_waiting_task_count,edge_avg_waiting_tasks_per_vm,edge_max_waiting_tasks_per_vm,cloud_total_waiting_task_count,cloud_avg_waiting_tasks_per_vm,cloud_max_waiting_tasks_per_vm,selected_vm_waiting_task_count,selected_vm_total_task_count,estimated_latency_ms,estimated_cost,estimated_reward,estimate_latency_error_ms,estimate_cost_error,estimate_reward_error,estimated_upload_delay_ms,estimated_processing_time_ms,estimated_download_delay_ms,estimate_vm_active_cloudlets,task_ready_at_dc_ms,reserved_vm_id,predicted_vm_available_time_ms,reserved_vm_start_ms,reserved_vm_finish_ms,reserved_dc_wait_ms,reserved_estimated_response_done_ms,reserved_estimated_latency_ms,bw_cost,cpu_cost,actual_cost,cost_source,cost_so_far,budget,latency_term,cost_term,budget_penalty,reward,budget_violated");
         rewardLogWriter.flush();
     }
 
@@ -1268,11 +1268,14 @@ public class DagRuntimeManager extends SimEntity {
                 String.format("%.2f", actualLatency),
                 String.format("%.2f", task.getQueueDelayMs()),
                 String.format("%.2f", task.getNetworkDelayMs()),
-                String.valueOf(trace != null ? trace.selectedDcVmCount : -1),
-                String.valueOf(trace != null ? trace.selectedDcQueueLen : -1),
-                String.format("%.6f", trace != null ? trace.selectedDcAvgQueueLen : -1.0),
-                String.format("%.6f", trace != null ? trace.selectedDcMaxQueueLen : -1.0),
-                String.format("%.6f", trace != null ? trace.selectedDcAvgUtilization : -1.0),
+                String.valueOf(trace != null ? trace.edgeTotalWaitingTaskCount : -1),
+                String.format("%.6f", trace != null ? trace.edgeAvgWaitingTasksPerVm : -1.0),
+                String.valueOf(trace != null ? trace.edgeMaxWaitingTasksPerVm : -1),
+                String.valueOf(trace != null ? trace.cloudTotalWaitingTaskCount : -1),
+                String.format("%.6f", trace != null ? trace.cloudAvgWaitingTasksPerVm : -1.0),
+                String.valueOf(trace != null ? trace.cloudMaxWaitingTasksPerVm : -1),
+                String.valueOf(trace != null ? trace.selectedVmWaitingTaskCount : -1),
+                String.valueOf(trace != null ? trace.selectedVmTotalTaskCount : -1),
                 String.format("%.2f", estimatedLatency),
                 String.format("%.12f", estimatedCost),
                 String.format("%.12f", estimatedReward),

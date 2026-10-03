@@ -37,6 +37,7 @@ CONFIG_FILE="${SCRIPT_DIR}/config/${CONFIG_NAME}.properties"
 if [[ ! -f "${CONFIG_FILE}" ]]; then
   CONFIG_FILE="${SCRIPT_DIR}/config/default_config.properties"
 fi
+EDGE_DEVICES_PATH="${SCRIPT_DIR}/config/${EDGE_DEVICES_FILE}"
 
 ORCHESTRATOR_POLICIES="$(awk -F= '
   /^[[:space:]]*orchestrator_policies[[:space:]]*=/ {
@@ -51,6 +52,20 @@ case ",${ORCHESTRATOR_POLICIES}," in
   *,REMOTE_RL,*) USES_REMOTE_RL=true ;;
 esac
 
+REDIS_CLI="$(command -v redis-cli || true)"
+if [[ -z "${REDIS_CLI}" ]]; then
+  for candidate in /usr/local/bin/redis-cli /opt/homebrew/bin/redis-cli; do
+    if [[ -x "${candidate}" ]]; then
+      REDIS_CLI="${candidate}"
+      break
+    fi
+  done
+fi
+if [[ "${USES_REMOTE_RL}" == "true" && -z "${REDIS_CLI}" ]]; then
+  echo "redis-cli was not found. Add Redis to PATH before running a REMOTE_RL config."
+  exit 1
+fi
+
 PARSER="${SCRIPT_DIR}/parse_iteration_log.py"
 REWARD_PARSER="${SCRIPT_DIR}/summarize_reward_log.py"
 PARSER_JOBS=()
@@ -60,10 +75,10 @@ for i in $(seq 1 "${NUM_RUNS}"); do
   
   if [[ "${USES_REMOTE_RL}" == "true" ]]; then
     echo "[${RUN_TAG}] waiting for training.py to be ready..."
-    while [ "$(redis-cli get rl:episode_ready 2>/dev/null)" != "1" ]; do
+    while [ "$("${REDIS_CLI}" get rl:episode_ready 2>/dev/null)" != "1" ]; do
       sleep 0.5
     done
-    redis-cli del rl:episode_ready > /dev/null
+    "${REDIS_CLI}" del rl:episode_ready > /dev/null
     echo "[${RUN_TAG}] training.py ready — starting simulation"
   else
     echo "[${RUN_TAG}] local policy (${ORCHESTRATOR_POLICIES}) — starting simulation"
@@ -86,7 +101,7 @@ for i in $(seq 1 "${NUM_RUNS}"); do
 
   if [[ -f "${REWARD_LOG_PATH}" ]]; then
     echo "[${RUN_TAG}] parsing reward log asynchronously"
-    python3 "${REWARD_PARSER}" "${REWARD_LOG_PATH}" --out "${REWARD_METRIC_JSON}" > "${CONFIG_ROOT}/reward_metrics_ite${i}.txt" &
+    python3 "${REWARD_PARSER}" "${REWARD_LOG_PATH}" --out "${REWARD_METRIC_JSON}" --properties "${CONFIG_FILE}" --edge-devices "${EDGE_DEVICES_PATH}" > "${CONFIG_ROOT}/reward_metrics_ite${i}.txt" &
     PARSER_JOBS+=("$!")
   else
     echo "[${RUN_TAG}] WARNING: reward log not found at ${REWARD_LOG_PATH}"
